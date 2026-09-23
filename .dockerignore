@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+.runtime
+.venv
+node_modules
+local-ai-plans
+docs
+data
+models
+__pycache__
+test-results

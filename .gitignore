@@ -5,3 +5,16 @@
 
 # Local AI implementation plans
 /local-ai-plans/
+
+# Runtime, dependencies and private meeting data
+node_modules/
+.venv/
+.runtime/
+data/
+models/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+frontend/dist/
+test-results/
+*.log
