@@ -1,0 +1,100 @@
+{
+  "id": "haSW03LocalTool",
+  "name": "[HA] SW03 | normalize_deadline",
+  "nodes": [
+    {
+      "id": "722a3154-db01-56e3-b9f1-46c2fd61346f",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "scope_token",
+              "type": "string"
+            },
+            {
+              "name": "arguments_json",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d66e082a-1ece-5b78-a1af-67e54b3bbe78",
+      "name": "Scoped tool gateway",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/tools/normalize_deadline",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "e806700d-f70d-5e66-b885-e3d9cebe5f94",
+      "name": "Guide (0, -200)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -200
+      ],
+      "parameters": {
+        "content": "## normalize_deadline\nScope comes from the parent workflow, never from the language model. Backend checks the current revision and access.",
+        "width": 440,
+        "height": 180,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Scoped tool gateway",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "timezone": "Asia/Qyzylorda",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "haWF08LocalFlow"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

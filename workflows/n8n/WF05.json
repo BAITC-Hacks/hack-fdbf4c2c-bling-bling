@@ -1,0 +1,704 @@
+{
+  "id": "haWF05LocalFlow",
+  "name": "[HA] WF05 | Вопросы, RAG и источники",
+  "nodes": [
+    {
+      "id": "722a3154-db01-56e3-b9f1-46c2fd61346f",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "scope_token",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4ebd8ef3-dba8-5cdd-a92f-cc3bcc7c408b",
+      "name": "Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        230,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/work/context",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "fe9f76ca-f10f-5bc6-ab6b-a9641472aa25",
+      "name": "Meeting QA",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        620,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_input }}",
+        "options": {
+          "systemMessage": "={{ $json.system_prompt }}",
+          "maxIterations": 4,
+          "returnIntermediateSteps": false,
+          "enableStreaming": false,
+          "autoSaveHighlightedData": false
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "43061cd0-d673-54c8-9b02-3942b11a15f2",
+      "name": "Ollama qa",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        540,
+        180
+      ],
+      "parameters": {
+        "model": "qwen3:4b",
+        "options": {
+          "temperature": 0,
+          "think": false,
+          "numCtx": 4096,
+          "numPredict": 1200,
+          "keepAlive": "30s",
+          "numBatch": 256
+        }
+      },
+      "credentials": {
+        "ollamaApi": {
+          "id": "haOllamaCred0001",
+          "name": "HackAlem Ollama local"
+        }
+      }
+    },
+    {
+      "id": "f27da24f-6e82-5ac7-8bbe-b2cbc4ee5926",
+      "name": "qa_search_meetings",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [
+        760,
+        190
+      ],
+      "parameters": {
+        "name": "search_meetings",
+        "description": "Search the confirmed meeting with local RAG. arguments_json: {\"query\":\"question\", \"limit\":6}. Return source IDs as citations.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "haSW06LocalTool",
+          "mode": "list"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "scope_token": "={{ $('Context').item.json.scope_token }}",
+            "arguments_json": "={{ $fromAI('arguments_json', 'JSON object of tool arguments. '+\"Search the confirmed meeting with local RAG. arguments_json: {\\\"query\\\":\\\"question\\\", \\\"limit\\\":6}. Return source IDs as citations.\", 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "scope_token",
+              "displayName": "scope_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "arguments_json",
+              "displayName": "arguments_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "1a73fd17-1e22-5c40-a8fe-e4f837792c49",
+      "name": "qa_get_evidence",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [
+        950,
+        190
+      ],
+      "parameters": {
+        "name": "get_evidence",
+        "description": "Read exact source segments in this meeting. arguments_json: {\"segment_ids\":[\"source-id\"]}. Use IDs from input, at most 20.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "haSW04LocalTool",
+          "mode": "list"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "scope_token": "={{ $('Context').item.json.scope_token }}",
+            "arguments_json": "={{ $fromAI('arguments_json', 'JSON object of tool arguments. '+\"Read exact source segments in this meeting. arguments_json: {\\\"segment_ids\\\":[\\\"source-id\\\"]}. Use IDs from input, at most 20.\", 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "scope_token",
+              "displayName": "scope_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "arguments_json",
+              "displayName": "arguments_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "4a19b009-4fa3-5c6e-b07b-d531bb7e72cb",
+      "name": "qa_get_confirmed_actions",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [
+        1140,
+        190
+      ],
+      "parameters": {
+        "name": "get_confirmed_actions",
+        "description": "Read confirmed actions. arguments_json: {\"status_filter\":\"all\"}. Optional assignee_name.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "haSW07LocalTool",
+          "mode": "list"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "scope_token": "={{ $('Context').item.json.scope_token }}",
+            "arguments_json": "={{ $fromAI('arguments_json', 'JSON object of tool arguments. '+\"Read confirmed actions. arguments_json: {\\\"status_filter\\\":\\\"all\\\"}. Optional assignee_name.\", 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "scope_token",
+              "displayName": "scope_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "arguments_json",
+              "displayName": "arguments_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "40b56d81-a652-5017-af94-7f1c438494a2",
+      "name": "qa_search_reference",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [
+        1330,
+        190
+      ],
+      "parameters": {
+        "name": "search_reference",
+        "description": "Find approved reference definitions. arguments_json: {\"query\":\"term\", \"limit\":3}. References do not prove meeting decisions.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "haSW01LocalTool",
+          "mode": "list"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "scope_token": "={{ $('Context').item.json.scope_token }}",
+            "arguments_json": "={{ $fromAI('arguments_json', 'JSON object of tool arguments. '+\"Find approved reference definitions. arguments_json: {\\\"query\\\":\\\"term\\\", \\\"limit\\\":3}. References do not prove meeting decisions.\", 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "scope_token",
+              "displayName": "scope_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "arguments_json",
+              "displayName": "arguments_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "6578546f-9711-5ca2-938e-f8adebb21142",
+      "name": "Validate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1600,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/work/validate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({scope_token: $('Context').item.json.scope_token, output: $json.output}) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "5cf30180-7bc8-5071-a498-bd76e9481d37",
+      "name": "Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1830,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "84ad80aa-fa1d-5305-b42c-544f456fab7b",
+      "name": "Commit revision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2520,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/work/commit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({scope_token:$json.scope_token, output:$json.output}) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "0af282c0-9354-51f2-b7fc-cdeb23bd75e2",
+      "name": "Repair once",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2000,
+        220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/work/repair",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "46f4d663-0d14-54da-8443-0f3d9b52fb72",
+      "name": "Revalidate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2210,
+        220
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/work/validate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "97d64808-9488-5517-8e4f-97413672c7a0",
+      "name": "Repaired",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2420,
+        220
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a90bb02a-5c80-54b8-b892-27b6a52ce17b",
+      "name": "Fail safely",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2650,
+        420
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/work/fail",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({scope_token:$('Context').item.json.scope_token,code:'agent_or_validation_failed'}) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "6eda669f-df0a-57e2-8d70-98d729eeee22",
+      "name": "Guide (0, -270)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -270
+      ],
+      "parameters": {
+        "content": "## Local AI pipeline\nEach execution handles one bounded work unit. Full transcript coverage is tracked in PostgreSQL. Tools are read-only. The final protocol requires human confirmation.\n\nOllama qwen3:4b · no cloud models · no shared chat memory",
+        "width": 600,
+        "height": 220,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama qa": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Meeting QA",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "qa_search_meetings": {
+      "ai_tool": [
+        [
+          {
+            "node": "Meeting QA",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "qa_get_evidence": {
+      "ai_tool": [
+        [
+          {
+            "node": "Meeting QA",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "qa_get_confirmed_actions": {
+      "ai_tool": [
+        [
+          {
+            "node": "Meeting QA",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "qa_search_reference": {
+      "ai_tool": [
+        [
+          {
+            "node": "Meeting QA",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Context": {
+      "main": [
+        [
+          {
+            "node": "Meeting QA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Meeting QA": {
+      "main": [
+        [
+          {
+            "node": "Validate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fail safely",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          {
+            "node": "Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid": {
+      "main": [
+        [
+          {
+            "node": "Commit revision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Repair once",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Repair once": {
+      "main": [
+        [
+          {
+            "node": "Revalidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revalidate": {
+      "main": [
+        [
+          {
+            "node": "Repaired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Repaired": {
+      "main": [
+        [
+          {
+            "node": "Commit revision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fail safely",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "timezone": "Asia/Qyzylorda",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "haWF08LocalFlow"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

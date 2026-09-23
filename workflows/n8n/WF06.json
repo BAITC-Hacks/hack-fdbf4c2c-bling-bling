@@ -1,0 +1,96 @@
+{
+  "id": "haWF06LocalFlow",
+  "name": "[HA] WF06 | Экспорт PDF и DOCX",
+  "nodes": [
+    {
+      "id": "722a3154-db01-56e3-b9f1-46c2fd61346f",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event_id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e8469cb4-9304-5899-9a9e-fd276dc560ed",
+      "name": "Durable worker job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/export-jobs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "c25eea8a-ffc6-58cc-a024-383cbdaaa256",
+      "name": "Guide (0, -220)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -220
+      ],
+      "parameters": {
+        "content": "## Background job\nThe backend validates confirmation and enqueues durable work. The local worker performs embedding/indexing or document generation. PostgreSQL publishes the result only for the current revision.",
+        "width": 530,
+        "height": 190,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Durable worker job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "timezone": "Asia/Qyzylorda",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "haWF08LocalFlow"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

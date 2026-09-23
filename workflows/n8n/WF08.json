@@ -1,0 +1,70 @@
+{
+  "id": "haWF08LocalFlow",
+  "name": "[HA] WF08 | Ошибки workflow",
+  "nodes": [
+    {
+      "id": "1a98cf07-2ed2-5a46-8942-db11afe90962",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "eeadb742-af15-5591-9a6f-8f86c0fe4814",
+      "name": "Safe error metadata",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        300,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/workflow-errors",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({execution_id:$json.execution?.id||'', workflow_id:$json.workflow?.id||''}) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Safe error metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "timezone": "Asia/Qyzylorda",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

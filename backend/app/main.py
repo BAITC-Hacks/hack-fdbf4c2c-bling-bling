@@ -114,6 +114,42 @@ def system(user=Depends(current_user)):
     return {**status, 'llm_model': settings.llm_model, 'asr_ready': Path(settings.asr_model).exists(), 'diarization_ready': Path(settings.speaker_model).exists()}
 
 
+@app.post('/api/users')
+def create_user(body: Login, user=Depends(current_user)):
+    if not user.is_admin:
+        raise HTTPException(403, 'Только администратор')
+    if len(body.password) < 12 or '@' not in body.email:
+        raise HTTPException(422, 'Укажите email и пароль не короче 12 символов')
+    with Session.begin() as db:
+        if db.scalar(select(User).where(User.email == body.email.lower())):
+            raise HTTPException(409, 'Пользователь уже существует')
+        other = User(email=body.email.lower(), password=password_hash(body.password))
+        db.add(other); db.flush()
+        return {'id': other.id, 'email': other.email}
+
+
+@app.put('/api/meetings/{meeting_id}/access')
+def grant_access(meeting_id: str, body: dict, user=Depends(current_user)):
+    with Session.begin() as db:
+        meeting = require_meeting(db, meeting_id, user.id, write=True, lock=True)
+        if meeting.owner_id != user.id:
+            raise HTTPException(403, 'Только владелец меняет доступ')
+        other = db.scalar(select(User).where(User.email == str(body.get('email', '')).lower()))
+        if not other:
+            raise HTTPException(404, 'Пользователь не найден')
+        role = body.get('role')
+        if role not in ('reader', 'editor', 'none'):
+            raise HTTPException(422, 'Роль reader, editor или none')
+        access = db.scalar(select(Access).where(Access.meeting_id == meeting_id, Access.user_id == other.id))
+        if role == 'none':
+            if access: db.delete(access)
+        elif access:
+            access.role = role
+        else:
+            db.add(Access(meeting_id=meeting_id, user_id=other.id, role=role))
+        return {'updated': True}
+
+
 @app.get('/api/meetings')
 def meetings(user=Depends(current_user)):
     with Session() as db:
@@ -159,7 +195,7 @@ def cancel_old(db, meeting):
 @app.post('/api/meetings/{meeting_id}/transcript')
 def transcript(meeting_id: str, body: TranscriptInput, user=Depends(current_user)):
     with Session.begin() as db:
-        meeting = require_meeting(db, meeting_id, user.id, write=True)
+        meeting = require_meeting(db, meeting_id, user.id, write=True, lock=True)
         if meeting.revision != body.expected_revision:
             raise HTTPException(409, 'Документ изменился; обновите страницу')
         cancel_old(db, meeting)
@@ -181,7 +217,7 @@ def transcript(meeting_id: str, body: TranscriptInput, user=Depends(current_user
 @app.post('/api/meetings/{meeting_id}/media')
 async def media(meeting_id: str, file: UploadFile = File(...), user=Depends(current_user)):
     with Session() as db:
-        require_meeting(db, meeting_id, user.id, write=True)
+        require_meeting(db, meeting_id, user.id, write=True, lock=True)
     folder = settings.data_dir / 'media' / meeting_id
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f'{uid()}.upload'
@@ -194,7 +230,7 @@ async def media(meeting_id: str, file: UploadFile = File(...), user=Depends(curr
                     raise HTTPException(413, 'Максимальный размер записи — 500 МБ')
                 out.write(block)
         with Session.begin() as db:
-            meeting = require_meeting(db, meeting_id, user.id, write=True)
+            meeting = require_meeting(db, meeting_id, user.id, write=True, lock=True)
             cancel_old(db, meeting)
             meeting.revision += 1
             meeting.state = 'processing'
@@ -204,6 +240,29 @@ async def media(meeting_id: str, file: UploadFile = File(...), user=Depends(curr
     except Exception:
         path.unlink(missing_ok=True)
         raise
+
+
+@app.post('/api/meetings/{meeting_id}/speaker-map')
+def speaker_map(meeting_id: str, body: dict, user=Depends(current_user)):
+    with Session.begin() as db:
+        meeting = require_meeting(db, meeting_id, user.id, write=True, lock=True)
+        if meeting.revision != body.get('expected_revision'):
+            raise HTTPException(409, 'Обновите документ перед изменением говорящих')
+        doc = copy.deepcopy(meeting.document)
+        mapping = body.get('mapping', {})
+        speaker_ids = {s.get('speaker_id', s['speaker']) for s in doc.get('segments', [])}
+        if not isinstance(mapping, dict) or not mapping or not set(mapping) <= speaker_ids or any(name not in doc.get('participants', []) for name in mapping.values()):
+            raise HTTPException(422, 'Выберите имена из списка участников')
+        for segment in doc.get('segments', []):
+            original = segment.setdefault('speaker_id', segment['speaker'])
+            if original in mapping:
+                segment['speaker'], segment['speaker_confirmed'] = mapping[original], True
+        cancel_old(db, meeting)
+        meeting.revision += 1
+        doc.update(actions=[], summary=[], warnings=[])
+        meeting.document, meeting.state = doc, 'processing'
+        jobs.emit(db, 'transcript.ready', meeting, user.id)
+        return meeting_json(meeting)
 
 
 @app.get('/api/meetings/{meeting_id}/audio')
@@ -223,7 +282,7 @@ def audio(meeting_id: str, user=Depends(current_user)):
 def edit_review(meeting_id: str, body: dict, user=Depends(current_user)):
     from .contracts import Action, Fact
     with Session.begin() as db:
-        meeting = require_meeting(db, meeting_id, user.id, write=True)
+        meeting = require_meeting(db, meeting_id, user.id, write=True, lock=True)
         if meeting.revision != body.get('expected_revision') or meeting.state not in ('ready_for_review', 'confirmed'):
             raise HTTPException(409, 'Проверьте состояние и ревизию')
         doc = copy.deepcopy(meeting.document)
@@ -254,7 +313,7 @@ def edit_review(meeting_id: str, body: dict, user=Depends(current_user)):
 @app.post('/api/meetings/{meeting_id}/confirm')
 def confirm(meeting_id: str, body: dict, user=Depends(current_user)):
     with Session.begin() as db:
-        meeting = require_meeting(db, meeting_id, user.id, write=True)
+        meeting = require_meeting(db, meeting_id, user.id, write=True, lock=True)
         if meeting.revision != body.get('expected_revision'):
             raise HTTPException(409, 'Устаревшая ревизия')
         if meeting.state == 'confirmed':
@@ -312,7 +371,7 @@ def download(job_id: str, user=Depends(current_user)):
 @app.delete('/api/meetings/{meeting_id}')
 def delete(meeting_id: str, user=Depends(current_user)):
     with Session.begin() as db:
-        meeting = require_meeting(db, meeting_id, user.id, write=True)
+        meeting = require_meeting(db, meeting_id, user.id, write=True, lock=True)
         cancel_old(db, meeting)
         meeting.deleted = True
         jobs.emit(db, 'meeting.deleted', meeting, user.id)
@@ -450,7 +509,10 @@ def maintenance():
 @app.post('/internal/workflow-errors', dependencies=internal)
 def workflow_errors(body: dict):
     # Failure branches release known leases. Unknown failures recover by lease timeout.
-    return {'recorded': True, 'execution_id': str(body.get('execution_id', ''))[:100]}
+    metadata = {key: str(body.get(key, ''))[:100] for key in ('execution_id', 'workflow_id')}
+    with Session.begin() as db:
+        db.add(Event(kind='workflow.error', user_id='system', state='recorded', payload=metadata))
+    return {'recorded': True, **metadata}
 
 
 @app.post('/internal/smoke/validate-model-results', dependencies=internal)

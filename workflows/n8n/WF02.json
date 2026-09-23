@@ -1,0 +1,297 @@
+{
+  "id": "haWF02LocalFlow",
+  "name": "[HA] WF02 | Диспетчер очереди",
+  "nodes": [
+    {
+      "id": "f181261a-e80e-50b6-b811-6f4be3f6217c",
+      "name": "Every 10 seconds",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 10
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "356c7ea4-5670-5994-9924-2977c19e876c",
+      "name": "Manual dispatch",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "5d33d5cc-e38f-563d-89e5-f6a4e0d304fc",
+      "name": "Claim one work unit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        230,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/work/claim",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "0ef950df-d479-5b37-8b4f-8283c83aa030",
+      "name": "Has work",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.has_work }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "50c4113c-a3df-5a4c-881c-a385a2d0931a",
+      "name": "Work type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        650,
+        0
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "qa",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "qa"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "50b8eea9-9262-5ace-9ca9-b3293bb5ad34",
+      "name": "Question answering",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        900,
+        -80
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "haWF05LocalFlow",
+          "mode": "list"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "scope_token": "={{ $json.scope_token }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "scope_token",
+              "displayName": "scope_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "ac2dc00c-a6db-5941-918a-ea68e2618fe2",
+      "name": "Meeting analysis",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        900,
+        120
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "haWF03LocalFlow",
+          "mode": "list"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "scope_token": "={{ $json.scope_token }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "scope_token",
+              "displayName": "scope_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 10 seconds": {
+      "main": [
+        [
+          {
+            "node": "Claim one work unit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual dispatch": {
+      "main": [
+        [
+          {
+            "node": "Claim one work unit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim one work unit": {
+      "main": [
+        [
+          {
+            "node": "Has work",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has work": {
+      "main": [
+        [
+          {
+            "node": "Work type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Work type": {
+      "main": [
+        [
+          {
+            "node": "Question answering",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Meeting analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "timezone": "Asia/Qyzylorda",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "haWF08LocalFlow"
+  },
+  "active": true,
+  "pinData": {},
+  "tags": []
+}

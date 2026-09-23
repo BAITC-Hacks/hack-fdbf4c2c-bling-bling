@@ -46,8 +46,11 @@ def service_auth(request: Request):
         raise HTTPException(401, 'Service authentication required')
 
 
-def require_meeting(db, meeting_id, user_id, write=False):
-    meeting = db.get(Meeting, meeting_id)
+def require_meeting(db, meeting_id, user_id, write=False, lock=False):
+    query = select(Meeting).where(Meeting.id == meeting_id)
+    if lock:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    meeting = db.scalar(query)
     access = db.scalar(select(Access).where(Access.meeting_id == meeting_id, Access.user_id == user_id))
     allowed = meeting and not meeting.deleted and (meeting.owner_id == user_id or (access and (not write or access.role == 'editor')))
     if not allowed:
@@ -75,7 +78,7 @@ def scoped_job(db, token, lock=False):
     if job.state != 'running' or job.expires < time.time():
         raise HTTPException(409, 'Expired lease')
     if job.meeting_id:
-        meeting = require_meeting(db, job.meeting_id, job.user_id)
+        meeting = require_meeting(db, job.meeting_id, job.user_id, write=job.kind != 'qa')
         if meeting.revision != job.revision:
             raise HTTPException(409, 'Stale revision')
     return job

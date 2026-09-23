@@ -62,13 +62,22 @@ services:
 
   api:
     <<: *app
-    ports: ["127.0.0.1:8080:8000"]
     command: [python, -m, uvicorn, backend.app.main:app, --host, 0.0.0.0, --port, "8000"]
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
       interval: 10s
       timeout: 5s
       retries: 20
+
+  web:
+    image: nginx:1.28.0-alpine
+    ports: ["127.0.0.1:8080:80"]
+    volumes: ["./nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
+    networks: [private, ingress]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
   worker:
     <<: *app
@@ -80,7 +89,6 @@ services:
   n8n:
     profiles: [managed-n8n]
     image: docker.n8n.io/n8nio/n8n:2.40.5
-    ports: ["127.0.0.1:5678:5678"]
     environment:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_SECURE_COOKIE: "false"
@@ -100,6 +108,15 @@ services:
     networks: [private]
     restart: unless-stopped
 
+  n8n-web:
+    profiles: [managed-n8n]
+    image: nginx:1.28.0-alpine
+    ports: ["127.0.0.1:5678:5678"]
+    volumes: ["./n8n-nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
+    networks: [private, ingress]
+    depends_on: [n8n]
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   ollama_data:
@@ -109,6 +126,7 @@ volumes:
   n8n_data:
 
 networks:
+  ingress:
   private:
     name: hackalem_private
     internal: true

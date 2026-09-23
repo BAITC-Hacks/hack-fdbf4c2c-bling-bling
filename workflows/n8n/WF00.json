@@ -1,0 +1,268 @@
+{
+  "id": "haWF00LocalFlow",
+  "name": "[HA] WF00 | Проверка Ollama + embeddings + tool calling",
+  "nodes": [
+    {
+      "id": "ce6aa5e6-4478-559b-b1b5-bfd59939055b",
+      "name": "Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "e605b718-6331-54f1-99b5-162bfa04b85e",
+      "name": "Readiness",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "http://api:8000/health/ready",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "ebc00cc4-0b7b-5671-a68f-2b59695f3180",
+      "name": "Embedding test",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        420,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/smoke/validate-model-results",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    },
+    {
+      "id": "ab7ae5f8-e2f8-5299-b968-560b0498b699",
+      "name": "Smoke Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        620,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "Call smoke_echo with value local-ok. Then report the returned value. /no_think",
+        "options": {
+          "systemMessage": "Use the provided tool. Do not pretend to call it.",
+          "maxIterations": 4,
+          "returnIntermediateSteps": true,
+          "enableStreaming": false,
+          "autoSaveHighlightedData": false
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "30000d93-139a-55f5-8685-3fa45793327a",
+      "name": "Ollama smoke",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        540,
+        180
+      ],
+      "parameters": {
+        "model": "qwen3:4b",
+        "options": {
+          "temperature": 0,
+          "think": false,
+          "numCtx": 4096,
+          "numPredict": 1200,
+          "keepAlive": "30s",
+          "numBatch": 256
+        }
+      },
+      "credentials": {
+        "ollamaApi": {
+          "id": "haOllamaCred0001",
+          "name": "HackAlem Ollama local"
+        }
+      }
+    },
+    {
+      "id": "cf6d61cc-8a50-5816-8c6a-55c1a6c3d101",
+      "name": "smoke_echo",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.1,
+      "position": [
+        760,
+        190
+      ],
+      "parameters": {
+        "name": "smoke_echo",
+        "description": "Echo input value. Use for local tool verification.",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "haSW00LocalTool",
+          "mode": "list"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "value": "={{ $fromAI('value', 'Value to echo', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "value",
+              "displayName": "value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      }
+    },
+    {
+      "id": "967a91d7-e218-515f-9df1-ee77e1bee2ff",
+      "name": "Verify observed tool call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/smoke/finish",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 240000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "haBackendCred001",
+          "name": "HackAlem backend"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Ollama smoke": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Smoke Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "smoke_echo": {
+      "ai_tool": [
+        [
+          {
+            "node": "Smoke Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual": {
+      "main": [
+        [
+          {
+            "node": "Readiness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Readiness": {
+      "main": [
+        [
+          {
+            "node": "Embedding test",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embedding test": {
+      "main": [
+        [
+          {
+            "node": "Smoke Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smoke Agent": {
+      "main": [
+        [
+          {
+            "node": "Verify observed tool call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "timezone": "Asia/Qyzylorda",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "haWF08LocalFlow"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}

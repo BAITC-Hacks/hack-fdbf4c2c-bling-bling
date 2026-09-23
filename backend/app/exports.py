@@ -19,7 +19,9 @@ def export_document(title, document, job_id, format):
         due = action.get('due', {}).get('date') or action.get('due_raw') or 'не указан'
         parts.append((f"{i}. {action['title']} — {action.get('assignee_mention') or 'исполнитель не указан'}; срок: {due}. Статус: {action.get('status', 'open')}", 'body'))
     parts += [('Транскрипт', 'heading')]
-    parts += [(f"[{s['start_ms']//60000:02d}:{(s['start_ms']//1000)%60:02d}] {s.get('speaker', 'SPEAKER')}: {s['text']}", 'body') for s in document['segments']]
+    for segment in document['segments']:
+        time_label = 'Текст' if segment.get('timing_source') == 'manual' else f"{segment['start_ms']//60000:02d}:{(segment['start_ms']//1000)%60:02d}"
+        parts.append((f"[{time_label}] {segment.get('speaker', 'SPEAKER')}: {segment['text']}", 'body'))
     temporary = path.with_suffix(path.suffix + '.tmp')
     if format == 'docx':
         doc = Document()

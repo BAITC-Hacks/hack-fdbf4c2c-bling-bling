@@ -1,0 +1,83 @@
+{
+  "id": "haSW00LocalTool",
+  "name": "[HA] SW00 | smoke_echo",
+  "nodes": [
+    {
+      "id": "722a3154-db01-56e3-b9f1-46c2fd61346f",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "value",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "167912d2-8d5f-5221-b0e7-bb24245ba0ef",
+      "name": "Return local value",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={{ JSON.stringify({value: $json.value, source: \"local-tool\"}) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "e806700d-f70d-5e66-b885-e3d9cebe5f94",
+      "name": "Guide (0, -200)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -200
+      ],
+      "parameters": {
+        "content": "## smoke_echo\nScope comes from the parent workflow, never from the language model. Backend checks the current revision and access.",
+        "width": 440,
+        "height": 180,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Return local value",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "timezone": "Asia/Qyzylorda",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "haWF08LocalFlow"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": []
+}
