@@ -13,7 +13,10 @@ API атомарно сохраняет результат в `data/processed/{m
 `summarization.py` реализует `MeetingSummaryService` через тот же LocalLLMClient.
 Обе инструкции читаются из `app/prompts/*.txt`. Основные поручения summary
 копируются из проверенного результата извлечения без изменения сроков/исполнителей.
-На следующих этапах здесь появятся alignment и export.
+Основной pipeline использует `analysis.py` / `LocalMeetingAnalyzer`: один inference
+для поручений и summary. `alignment.py` сопоставляет сегменты с голосами без
+выдуманного имени; `export.py` создаёт DOCX/PDF локально. Отдельные extraction и
+summarization сохранены для совместимости, новый pipeline их не вызывает.
 При недоступных моделях тестовые адаптеры будут явно обозначаться как mock.
 Статус `audio_ready` означает только подготовку аудио, а не выполнение AI pipeline.
 `transcribed` означает только завершение STT; остальные стадии имеют отдельные статусы.

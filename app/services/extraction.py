@@ -31,7 +31,9 @@ def validate_grounding(result: ActionItemExtractionResult, segments: list[Extrac
         for evidence in item.evidence:
             if normalized(evidence.quote) not in normalized(sources[evidence.segment_id].text):
                 raise ValueError("ungrounded_quote")
-        texts = [normalized(sources[key].text) for key in ids]
+        # The evidence actually shown to the user must support these fields,
+        # not merely some unrelated text elsewhere in a long source segment.
+        texts = [normalized(e.quote) for e in item.evidence]
         speakers = [normalized(sources[key].speaker or "") for key in ids]
         if item.responsible is not None and not any(normalized(item.responsible) in text for text in texts + speakers):
             raise ValueError("ungrounded_responsible")
@@ -42,8 +44,8 @@ def validate_grounding(result: ActionItemExtractionResult, segments: list[Extrac
             if not set(milestone.source_segment_ids) <= ids:
                 raise ValueError("invalid_milestone_sources")
             if milestone.deadline_raw is not None and not any(
-                normalized(milestone.deadline_raw) in normalized(sources[key].text)
-                for key in milestone.source_segment_ids
+                normalized(milestone.deadline_raw) in normalized(e.quote)
+                for e in item.evidence if e.segment_id in milestone.source_segment_ids
             ):
                 raise ValueError("ungrounded_milestone_deadline")
 

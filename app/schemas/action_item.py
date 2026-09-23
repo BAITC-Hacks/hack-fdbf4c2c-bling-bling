@@ -55,4 +55,4 @@ class ActionItemExtractionRead(ActionItemExtractionResult):
     source_segments: list[ExtractionSegment]
     source_transcript_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     model: str
-    prompt_version: Literal["1", "2"] = "2"
+    prompt_version: Literal["1", "2", "joint-1"] = "2"

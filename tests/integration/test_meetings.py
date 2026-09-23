@@ -48,4 +48,28 @@ def test_missing_and_invalid_ids(settings):
             "/meetings/{id}/diarization/status", "/meetings/{id}/speakers",
             "/meetings/{id}/extract-action-items", "/meetings/{id}/action-items",
             "/meetings/{id}/action-items/status", "/meetings/{id}/summarize",
-            "/meetings/{id}/summary", "/meetings/{id}/summary/status"}
+            "/meetings/{id}/summary", "/meetings/{id}/summary/status", "/meetings/{id}/process",
+            "/meetings/{id}/analysis", "/meetings/{id}/analyze", "/meetings/{id}/result",
+            "/meetings/{id}/pipeline/status", "/meetings/{id}/exports/{format}"}
+
+
+def test_optional_meeting_date_persists(settings):
+    with TestClient(create_app(settings)) as client:
+        response = client.post("/meetings", json={"title": "Дата", "meeting_date": "2026-09-20"})
+        assert response.status_code == 201
+        meeting = response.json()
+        assert meeting["meeting_date"] == "2026-09-20"
+        assert client.post("/meetings", json={"title": "Дата", "meeting_date": "2026-02-30"}).status_code == 422
+    with TestClient(create_app(settings)) as client:
+        assert client.get(f"/meetings/{meeting['id']}").json() == meeting
+
+
+def test_local_frontend_resources(settings):
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        assert "Протокол совещания" in response.text
+        assert "default-src 'self'" in response.headers["content-security-policy"]
+        for resource in ("/static/app.js", "/static/styles.css"):
+            assert client.get(resource).status_code == 200
+        assert client.get("/static/../app/core/config.py").status_code == 404

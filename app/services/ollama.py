@@ -9,7 +9,7 @@ from app.services.local_llm import LocalLLMError
 
 
 class OllamaClient:
-    def __init__(self, settings: Settings, *, transport: httpx.BaseTransport | None = None):
+    def __init__(self, settings: Settings, *, transport: httpx.BaseTransport | None = None, server_context_check: bool = False):
         self.settings = settings
         # Validate even when a caller supplies Settings.model_construct/copy.
         validated = Settings.loopback_only(settings.ollama_base_url)
@@ -17,6 +17,7 @@ class OllamaClient:
         host = "[::1]" if url.hostname == "::1" else "127.0.0.1"
         self.base_url = f"http://{host}" + (f":{url.port}" if url.port is not None else "")
         self.transport = transport
+        self.server_context_check = server_context_check
 
     @staticmethod
     def _post(client: httpx.Client, path: str, body: dict) -> dict:
@@ -24,13 +25,19 @@ class OllamaClient:
         with client.stream("POST", path, json=body) as response:
             if response.status_code == 404:
                 raise LocalLLMError("llm_model_missing", "Локальная модель или endpoint Ollama не найдены. Подготовьте модель заранее.")
-            if response.status_code != 200:
-                raise LocalLLMError("llm_request_failed", "Локальный сервер отклонил запрос. Проверьте модель, размер контекста и настройки.")
             data = bytearray()
             for chunk in response.iter_bytes():
                 data.extend(chunk)
                 if len(data) > 4 * 1024 * 1024:
                     raise LocalLLMError("llm_response_too_large", "Ответ локальной модели слишком велик.", 502)
+            if response.status_code != 200:
+                try:
+                    error = str(json.loads(data).get("error", "")).lower()
+                except (ValueError, AttributeError):
+                    error = ""
+                if response.status_code in {400, 413, 500} and "context" in error and any(word in error for word in ("input", "prompt", "request")) and any(word in error for word in ("exceed", "too long", "too large")):
+                    raise LocalLLMError("llm_context_exceeded", "Входной запрос превышает контекст локальной модели.", 413)
+                raise LocalLLMError("llm_request_failed", "Локальный сервер отклонил запрос. Проверьте модель, размер контекста и настройки.")
         try:
             value = json.loads(data)
             if not isinstance(value, dict) or value.get("error"):
@@ -58,7 +65,7 @@ class OllamaClient:
                 context = min([self.settings.llm_num_ctx, *limits])
                 # Conservative byte-based budget, including server template and output reserve.
                 rendered = system + user + json.dumps(schema, ensure_ascii=False) + str(info.get("template", "")) + str(info.get("system", "")) + json.dumps(info.get("messages", []), ensure_ascii=False)
-                if len(rendered.encode("utf-8")) + self.settings.llm_num_predict + 512 > context:
+                if not self.server_context_check and len(rendered.encode("utf-8")) + self.settings.llm_num_predict + 512 > context:
                     raise LocalLLMError("llm_context_exceeded", "Транскрипт не помещается в контекст модели. Увеличьте локальный контекст; текст не обрезается.", 413)
                 reply = self._post(client, "/api/chat", {
                     "model": model, "stream": False, "format": schema,

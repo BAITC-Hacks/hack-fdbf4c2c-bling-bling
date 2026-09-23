@@ -2,12 +2,14 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.meeting import Meeting
+from app.models.meeting import Meeting, MeetingDetails
 from app.schemas.meeting import MeetingCreate
 
 
 def create_meeting(session: Session, payload: MeetingCreate) -> Meeting:
     meeting = Meeting(title=payload.title)
+    if payload.meeting_date is not None:
+        meeting.details = MeetingDetails(meeting_date=payload.meeting_date)
     session.add(meeting)
     session.commit()
     session.refresh(meeting)

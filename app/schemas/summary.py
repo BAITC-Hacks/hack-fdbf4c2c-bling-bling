@@ -42,4 +42,4 @@ class MeetingSummaryRead(MeetingSummary):
     source_transcript_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     source_action_items_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     model: str
-    prompt_version: Literal["1"] = "1"
+    prompt_version: Literal["1", "joint-1"] = "1"

@@ -137,3 +137,32 @@ def test_original_language_department_and_nulls_preserved(text, name, deadline):
     result, _ = extract(segments, [item])
     assert result.action_items[0].responsible == name
     assert result.action_items[0].deadline_raw == deadline
+
+
+@pytest.mark.parametrize("field", ["responsible", "deadline_raw", "condition", "milestone"])
+def test_evidence_must_contain_supporting_words_not_just_same_segment(field):
+    text = "Обсудили поставки. Ерлан, до пятницы подготовьте претензию. Если будет нарушение — расторгнуть договор."
+    segment = ExtractionSegment(id=0, text=text)
+    item = dict(description="Поручение", responsible=None, deadline_raw=None, source_segment_ids=[0],
+                confidence=0.9, decision_type="assigned", condition=None, milestones=[],
+                evidence=[dict(segment_id=0, quote="Обсудили поставки.")])
+    if field == "responsible":
+        item[field] = "Ерлан"
+    elif field == "deadline_raw":
+        item[field] = "до пятницы"
+    elif field == "condition":
+        item.update(decision_type="conditional", condition="Если будет нарушение")
+    else:
+        item["milestones"] = [dict(description="Претензия", deadline_raw="до пятницы", source_segment_ids=[0])]
+    with pytest.raises(ExtractionError):
+        extract([segment], [item])
+    item["evidence"][0]["quote"] = text
+    assert len(extract([segment], [item])[0].action_items) == 1
+
+
+def test_confirmed_speaker_can_support_first_person_assignment():
+    segment = ExtractionSegment(id=0, text="Подготовлю отчёт до пятницы.", speaker="Ерлан")
+    item = dict(description="Подготовить отчёт", responsible="Ерлан", deadline_raw="до пятницы",
+                source_segment_ids=[0], confidence=0.9, decision_type="assigned", condition=None,
+                milestones=[], evidence=[dict(segment_id=0, quote=segment.text)])
+    assert extract([segment], [item])[0].action_items[0].responsible == "Ерлан"

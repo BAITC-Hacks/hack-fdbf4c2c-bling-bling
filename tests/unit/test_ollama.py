@@ -101,3 +101,24 @@ def test_context_guard_does_not_truncate_or_send_transcript():
         generate(client(handler))
     assert error.value.status == 413
     assert len(calls) == 1
+
+
+def test_server_context_mode_does_not_chunk_based_on_byte_estimate():
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json={"model_info": {"test.context_length": 128}} if request.url.path == "/api/show" else REPLY)
+    adapter = OllamaClient(Settings(_env_file=None, ollama_model="local-test"), transport=httpx.MockTransport(handler), server_context_check=True)
+    assert json.loads(generate(adapter)) == {"action_items": []}
+    assert len(calls) == 2
+
+
+def test_server_confirmed_overflow_is_identifiable_and_private():
+    def handler(request):
+        if request.url.path == "/api/show":
+            return httpx.Response(200, json=LOCAL_MODEL)
+        return httpx.Response(400, json={"error": "the input length exceeds the context length PRIVATE_TRANSCRIPT"})
+    with pytest.raises(LocalLLMError) as error:
+        generate(client(handler))
+    assert error.value.code == "llm_context_exceeded"
+    assert "PRIVATE_TRANSCRIPT" not in str(error.value)

@@ -7,7 +7,7 @@ PROMPTS_DIR = Path(__file__).resolve().parent
 
 
 def load_prompt(name: str) -> str:
-    if name not in {"action_items.txt", "meeting_summary.txt"}:
+    if name not in {"action_items.txt", "meeting_summary.txt", "meeting_analyzer.txt", "chunk_facts.txt"}:
         raise ValueError("Unknown prompt asset")
     try:
         prompt = (PROMPTS_DIR / name).read_text(encoding="utf-8").strip()

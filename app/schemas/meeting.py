@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class MeetingCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     title: str = Field(min_length=1, max_length=200)
+    meeting_date: date | None = None
 
 
 class MeetingStatus(BaseModel):
@@ -18,6 +19,7 @@ class MeetingStatus(BaseModel):
 
 class MeetingRead(MeetingStatus):
     title: str
+    meeting_date: date | None = None
     created_at: datetime
 
     @field_validator("created_at")

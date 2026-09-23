@@ -94,6 +94,8 @@ def test_invalid_evidence_decisions_or_new_fields(example, change):
 def test_retry_and_multiple_action_deadlines_preserved(example):
     segments, actions, draft = example
     segments[2].text += " Смета за неделю, закрыть очередь за месяц."
+    # The added milestone deadlines must also be in the evidence shown to the user.
+    actions.action_items[0].evidence[0].quote = segments[2].text
     from app.schemas.action_item import Milestone
     actions.action_items[0].milestones = [Milestone(description="Смета", deadline_raw="за неделю", source_segment_ids=[12]),
                                          Milestone(description="Закрыть очередь", deadline_raw="за месяц", source_segment_ids=[12])]

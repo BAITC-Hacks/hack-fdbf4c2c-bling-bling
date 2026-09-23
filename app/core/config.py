@@ -44,12 +44,15 @@ class Settings(BaseSettings):
     extraction_attempts: int = Field(default=2, ge=1, le=3)
     summary_max_chars: int = Field(default=60000, ge=1)
     summary_attempts: int = Field(default=2, ge=1, le=3)
+    analysis_max_requests: int = Field(default=12, ge=1, le=32)
+    analysis_max_chunks: int = Field(default=6, ge=2, le=16)
+    pdf_font_path: Path | None = None
     ffmpeg_path: str = "ffmpeg"
     max_upload_bytes: int = Field(default=500 * 1024 * 1024, gt=0)
     max_audio_seconds: int = Field(default=4 * 60 * 60, gt=0)
     ffmpeg_timeout_seconds: int = Field(default=600, gt=0)
 
-    @field_validator("data_dir", "database_path", "diarization_model_path", "whisper_model_path")
+    @field_validator("data_dir", "database_path", "diarization_model_path", "whisper_model_path", "pdf_font_path")
     @classmethod
     def absolute_path(cls, value: Path | None) -> Path | None:
         if value is None:
