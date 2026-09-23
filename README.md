@@ -4,12 +4,19 @@
 Главный источник — [ai-review/requirements.md](ai-review/requirements.md).
 План — [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
-## Состояние: локальный Speech-to-Text (этап 4)
+## Состояние: внешние prompt-файлы и summary (этапы 8–9)
 
 Работают FastAPI, конфигурация ENV, создание/чтение метаданных совещаний в SQLite,
 статусы подготовки/STT и `/health`. Записи сохраняются после перезапуска, даты создания
 возвращаются в UTC. Работают загрузка, подготовка аудио и локальный faster-whisper.
-Диаризация, поручения, summary, экспорт и frontend еще не реализованы.
+Добавлены адаптер Community-1, API диаризации и ручное сопоставление голосов с
+именами. Их контракты проверены тестами; реальный inference диаризации пока
+не проверен, поскольку gated-веса модели не скачаны. Добавлены сервис извлечения
+поручений, локальный адаптер Ollama, строгая JSON Schema, проверка цитат/ссылок
+и сохранение в SQLite. Качество настоящей LLM пока не проверено: Ollama недоступна.
+Добавлены отдельные UTF-8 prompts и MeetingSummaryService с пятью разделами,
+ссылками на реплики и сохранением в SQLite; настоящий LLM-прогон summary также
+ожидает модель. Alignment этапа 6, экспорт и frontend еще не реализованы.
 Внешние AI API не вызываются. `/health` проверяет API, а не наличие весов моделей.
 
 ## Установка и запуск
@@ -32,7 +39,8 @@ python3.11 -m venv .venv
 
 Без тестовых зависимостей достаточно `requirements.txt`. Для загрузки нужен
 ffmpeg в PATH или `HACKALEM_FFMPEG_PATH` с путем к исполняемому файлу.
-Ollama пока не нужен. Для STT нужны отдельные зависимости и предварительно скачанные
+Для извлечения поручений нужны Ollama и локальная модель; остальные endpoint работают без них.
+Для STT нужны отдельные зависимости и предварительно скачанные
 веса (инструкция ниже). Сеть нужна при подготовке, но не при обработке записи.
 Для разработки `requirements-dev.txt` включает сборку ffmpeg через imageio-ffmpeg:
 
@@ -60,9 +68,10 @@ ENV-файлы с примерами не хранятся в репозитор
 | `HACKALEM_MAX_UPLOAD_BYTES` | `524288000` | До 500 MiB на файл |
 | `HACKALEM_MAX_AUDIO_SECONDS` | `14400` | До 4 часов аудио |
 | `HACKALEM_FFMPEG_TIMEOUT_SECONDS` | `600` | Максимальное время преобразования |
-| `HACKALEM_DIARIZATION_MODEL_PATH` | `models/speaker-diarization-community-1` | Будущие локальные веса |
-| `HACKALEM_OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Только HTTP loopback; пока не вызывается |
-| `HACKALEM_OLLAMA_MODEL` | пусто | Задается перед реализацией анализа |
+| `DIARIZATION_MODEL_PATH` | `models/speaker-diarization-community-1` | Локальные веса Community-1; старый alias `HACKALEM_DIARIZATION_MODEL_PATH` сохранен |
+| `DIARIZATION_DEVICE` | `auto` | `cpu`, `cuda` или автовыбор |
+| `HACKALEM_OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Только HTTP loopback, без proxy/redirects |
+| `HACKALEM_OLLAMA_MODEL` | пусто | Имя заранее установленной локальной модели |
 
 База и каталоги создаются при старте. `.env`, данные, модели и окружение исключены
 из Git. Содержимое встреч не логируется приложением. Авторизации пока нет:
@@ -86,6 +95,17 @@ Invoke-RestMethod "http://127.0.0.1:8000/meetings/$($meeting.id)/status"
 | `POST /meetings/{id}/upload` | multipart поле `file` → 200, параметры подготовленного WAV |
 | `POST /meetings/{id}/transcribe` | Без тела → синхронный локальный STT, 200 с транскриптом |
 | `GET /meetings/{id}/transcript` | 200 с сохраненным транскриптом |
+| `POST /meetings/{id}/diarize` | Без тела → синхронная локальная диаризация |
+| `GET /meetings/{id}/diarization` | Сохраненный список speaker_id/start/end |
+| `GET /meetings/{id}/diarization/status` | not_started / running / ready |
+| `GET /meetings/{id}/speakers` | Голоса и вручную назначенные имена; неизвестные имена — null |
+| `PUT /meetings/{id}/speakers` | Заменяет ручное сопоставление голосов с именами |
+| `POST /meetings/{id}/extract-action-items` | Без тела → поручения из готового транскрипта |
+| `GET /meetings/{id}/action-items` | Поручения, цитаты и снимок исходных сегментов |
+| `GET /meetings/{id}/action-items/status` | not_started / running / ready |
+| `POST /meetings/{id}/summarize` | Summary по транскрипту и сохраненным поручениям |
+| `GET /meetings/{id}/summary` | Пять разделов, цитаты и снимок источников |
+| `GET /meetings/{id}/summary/status` | not_started / running / ready |
 
 Название после удаления крайних пробелов: 1–200 символов. Неизвестные поля
 и неправильный UUID дают 422; отсутствующий UUID — 404. Создание записи не
@@ -143,7 +163,7 @@ Multipart разбирается библиотекой до вызова обр
 
 `app/main.py` — lifecycle; `app/api/` — HTTP; `app/core/` — ENV и логи;
 `app/models/` — SQLAlchemy; `app/schemas/` — Pydantic; `app/repositories/` —
-данные; `app/db/` — сессии; `app/services/` — подготовка аудио и STT.
+данные; `app/db/` — сессии; `app/services/` — аудио, STT, диаризация и извлечение поручений.
 Зарезервированы `frontend/`, `scripts/`, `tests/fixtures/`.
 Локальные данные находятся в `data/uploads/`, `data/processed/`, `data/exports/`.
 
@@ -154,9 +174,35 @@ Multipart разбирается библиотекой до вызова обр
 
 Linux/macOS: `.venv/bin/python -m pytest -q`. Тесты используют временную базу
 и проверяют API, перезапуск, валидацию, ENV и запрет внешнего адреса Ollama.
-Автотесты используют синтетические записи и явно выделенные doubles STT. Результаты
+Автотесты используют синтетические записи и явно выделенные doubles STT/диаризации. Результаты
 отдельного реального прогона на открытых данных описаны в `docs/STT_EVALUATION.md`.
-Развернутой версии нет; полный сценарий до поручений и экспорта пока не реализован.
+Развернутой версии нет; полный сценарий до экспорта пока не реализован.
+
+## Извлечение поручений
+
+Реализованы `ActionItemExtractionService`, независимый интерфейс `LocalLLMClient`
+и адаптер `OllamaClient`. Результат содержит исполнителя, исходный срок или `null`,
+`source_segment_ids`, цитаты, условие для условных решений и несколько сроков в
+`milestones`. Поручения и снимок источников сохраняются локально в SQLite.
+
+Подготовка Ollama с отключенным облаком, ENV, пример запроса, схема, ошибки,
+границы проверок и оценка качества: [docs/ACTION_EXTRACTION.md](docs/ACTION_EXTRACTION.md).
+Модель должна быть скачана заранее; ключи и ENV-файлы не требуются.
+Автотесты с doubles не подтверждают семантическую точность. Реальный LLM-прогон
+пока недоступен; длинные транскрипты за пределами контекста отклоняются без обрезания.
+
+## Prompts и summary
+
+Инструкции находятся в `app/prompts/action_items.txt` и
+`app/prompts/meeting_summary.txt`, не внутри Python. `MeetingSummaryService`
+использует тот же `LocalLLMClient`. Summary содержит темы, обсуждения, решения,
+проблемы/риски и основные поручения с исходными сроками/исполнителями.
+Для запуска нужны завершенные STT и извлечение поручений. Детали API, настройки,
+проверки и ограничения: [docs/MEETING_SUMMARY.md](docs/MEETING_SUMMARY.md).
+
+Итоговые проверки этапов 8–9: **155 тестов прошли**, живой HTTP `/health` — 200.
+Качество настоящей LLM пока не подтверждено; числовые и цитатные проверки не
+заменяют смысловую проверку summary.
 
 ## Speech-to-Text: подготовка модели
 
@@ -264,3 +310,84 @@ Invoke-RestMethod "http://127.0.0.1:8000/meetings/$($meeting.id)/transcript"
 Manifest — список объектов `name`, `audio` (путь относительно manifest), `reference`.
 Скрипт не загружает данные и блокирует Python socket.connect во время оценки;
 это не заменяет системный firewall. Отчет с текстами и WER остается под `data/` вне Git.
+
+## Диаризация Community-1
+
+Community-1 — модель, которая выделяет интервалы речи разных говорящих. Она
+не определяет имена людей и не выполняет биометрическую идентификацию.
+Используется локальный [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1).
+Для скачивания нужно самостоятельно принять условия доступа на странице модели
+в Hugging Face и авторизоваться локально. Никакие записи для этого не отправляются.
+
+Подготовка в отдельном процессе до запуска сервера:
+
+```powershell
+.venv/Scripts/python.exe -m pip install -r requirements-diarization.txt
+.venv/Scripts/hf.exe auth login
+.venv/Scripts/python.exe scripts/prepare_diarization.py
+$env:DIARIZATION_DEVICE = 'cpu'
+.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Linux/macOS: используйте `.venv/bin/python` и `.venv/bin/hf`.
+Токен вводится в локальном диалоге `hf auth login`, без сохранения в Git credential;
+его нельзя помещать в репозиторий или чат. ENV-файл не требуется.
+Если веса уже скачаны, задайте `DIARIZATION_MODEL_PATH` на их каталог.
+В нем должны быть `config.yaml`, `segmentation/pytorch_model.bin`,
+`embedding/pytorch_model.bin`, `plda/plda.npz`, `plda/xvec_transform.npz`.
+Указатели Git LFS вместо весов отклоняются.
+
+Адаптер лениво загружает модель из локальных файлов. Внешние ссылки на компоненты
+заменяются локальными путями; `HF_HUB_OFFLINE=1`, `HF_HUB_DISABLE_TELEMETRY=1` и
+`PYANNOTE_METRICS_ENABLED=0` принудительно устанавливаются в процессе inference.
+Скрипт подготовки запускается отдельно: он выполняет явное скачивание весов.
+WAV читается напрямую как PCM16 mono 16 kHz и передается в pyannote тензором.
+CUDA требует совместимой GPU-сборки PyTorch; явный выбор недоступной CUDA дает 503,
+`auto` выбирает CPU при ее отсутствии. Модель не скачивается автоматически при запросе.
+
+После загрузки аудио (до или после STT):
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/meetings/$($meeting.id)/diarize" -Method Post
+Invoke-RestMethod "http://127.0.0.1:8000/meetings/$($meeting.id)/diarization"
+Invoke-RestMethod "http://127.0.0.1:8000/meetings/$($meeting.id)/speakers"
+$mapping = @{names = @{SPEAKER_00 = 'Асхат Ерланович'; SPEAKER_01 = 'Гульмира Сериковна'}} | ConvertTo-Json
+Invoke-RestMethod "http://127.0.0.1:8000/meetings/$($meeting.id)/speakers" -Method Put -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes($mapping))
+```
+
+Пример формы результата, а не вывод реального прогона:
+
+```json
+[
+  {"speaker_id": "SPEAKER_00", "start": 0.0, "end": 4.2},
+  {"speaker_id": "SPEAKER_01", "start": 3.8, "end": 6.0}
+]
+```
+
+Результат атомарно сохраняется в `data/processed/{meeting_id}/diarization.json`.
+Сохраняются пересекающиеся интервалы, а временная шкала совпадает с подготовленным
+WAV. Метки назначаются в порядке первого появления и имеют смысл только внутри
+одной встречи. Если модель не обнаружила речь, сохраняется `[]`, имена не выдумываются.
+Ручные имена находятся в новой таблице SQLite `meeting_diarization`; существующие
+таблицы сохраняются. PUT полностью заменяет сопоставление: пропущенное имя становится
+`null`, `{"names": {}}` очищает все имена. Неизвестные метки отклоняются с 422.
+Сопоставление пока доступно через API; frontend и объединение с репликами — следующие этапы.
+
+Диаризация имеет собственный статус, не меняет статус STT и не закрывает доступ
+к транскрипту. Повтор готового или выполняющегося запроса дает 409; для эксперимента
+с другими весами создайте новую встречу. Один адаптер обрабатывает одну запись
+за раз. При обычной ошибке удаляется частичный результат, повтор разрешен.
+Нет восстановления после аварийного завершения процесса: может остаться `running`.
+На компьютере с малой RAM запускайте STT и диаризацию последовательно;
+обе модели кешируются в памяти, автоматической выгрузки пока нет.
+
+Основные ошибки: 503 `diarization_model_not_ready`, `diarization_dependency_missing`,
+`diarization_model_load_failed`, `diarization_cuda_unavailable`; 422
+`diarization_audio_invalid`; 409 `diarization_busy` / `diarization_conflict`;
+500 `diarization_failed`; 507 `diarization_storage_error`.
+
+Проверки этапа: **79 тестов прошли**, живой `/health` вернул 200. Проверены реальный
+импорт pyannote 4.0.7 и декодирование PCM в torch с блокировкой Python socket.connect,
+телеметрия выключена. Это не системный firewall и не проверка полного inference.
+Веса Community-1 требуют gated-доступа и в текущей среде не скачаны. Качество на
+многоголосой RU/KZ записи и работа на настоящей CUDA пока не подтверждены.

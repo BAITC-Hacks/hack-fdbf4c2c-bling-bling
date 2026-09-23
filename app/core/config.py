@@ -30,9 +30,20 @@ class Settings(BaseSettings):
     whisper_chunk_length: int = Field(default=30, ge=1, le=30, validation_alias="WHISPER_CHUNK_LENGTH")
     whisper_cpu_threads: int = Field(default=4, ge=1, validation_alias="WHISPER_CPU_THREADS")
     whisper_condition_on_previous_text: bool = Field(default=False, validation_alias="WHISPER_CONDITION_ON_PREVIOUS_TEXT")
-    diarization_model_path: Path = ROOT / "models/speaker-diarization-community-1"
+    diarization_model_path: Path = Field(
+        default=ROOT / "models/speaker-diarization-community-1",
+        validation_alias=AliasChoices("DIARIZATION_MODEL_PATH", "HACKALEM_DIARIZATION_MODEL_PATH"),
+    )
+    diarization_device: Literal["cpu", "cuda", "auto"] = Field(default="auto", validation_alias="DIARIZATION_DEVICE")
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = ""
+    llm_timeout_seconds: float = Field(default=180, gt=0, le=1800)
+    llm_num_ctx: int = Field(default=32768, ge=4096, le=262144)
+    llm_num_predict: int = Field(default=4096, ge=256, le=32768)
+    extraction_max_chars: int = Field(default=60000, ge=1)
+    extraction_attempts: int = Field(default=2, ge=1, le=3)
+    summary_max_chars: int = Field(default=60000, ge=1)
+    summary_attempts: int = Field(default=2, ge=1, le=3)
     ffmpeg_path: str = "ffmpeg"
     max_upload_bytes: int = Field(default=500 * 1024 * 1024, gt=0)
     max_audio_seconds: int = Field(default=4 * 60 * 60, gt=0)
@@ -70,6 +81,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def check_whisper(self):
+        if self.llm_num_predict >= self.llm_num_ctx:
+            raise ValueError("LLM_NUM_PREDICT must be less than LLM_NUM_CTX")
         if self.whisper_multilingual and self.whisper_language is not None:
             raise ValueError("WHISPER_LANGUAGE must be auto with WHISPER_MULTILINGUAL=true")
         if not self.stt_model.strip() or self.stt_model.endswith(".en"):
