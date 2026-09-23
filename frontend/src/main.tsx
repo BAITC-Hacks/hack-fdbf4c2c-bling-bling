@@ -17,8 +17,10 @@ function App(){
  const[list,setList]=useState<any[]>([]),[selected,setSelected]=useState(''),[meeting,setMeeting]=useState<any>(null),[system,setSystem]=useState<any>({}),[notices,setNotices]=useState<any[]>([]);
  const[draft,setDraft]=useState<any[]>([]),[draftRevision,setDraftRevision]=useState(0),[text,setText]=useState(''),[question,setQuestion]=useState('');
  const[busy,setBusy]=useState(false),[showNew,setShowNew]=useState(false),audio=useRef<HTMLAudioElement>(null);
+ const selectedRef=useRef(selected);selectedRef.current=selected;
  useEffect(()=>{api('/me').then(setUser).catch(()=>{}).finally(()=>setBoot(false));},[]);
- async function refresh(){if(!user)return;const [ls,ns]=await Promise.all([api('/meetings'),api('/notifications')]);setList(ls);setNotices(ns);if(selected){const m=await api('/meetings/'+selected);setMeeting(m);setDraftRevision(old=>{if(old!==m.revision){setDraft(structuredClone(m.document.actions||[]));}return m.revision;});}}
+ async function refresh(){if(!user)return;const [ls,ns]=await Promise.all([api('/meetings'),api('/notifications')]);setList(ls);setNotices(ns);if(selected){const m=await api('/meetings/'+selected);if(selectedRef.current===selected)setMeeting(m);}}
+ useEffect(()=>{if(meeting){setDraft(structuredClone(meeting.document.actions||[]));setDraftRevision(meeting.revision);}},[selected,meeting?.revision,meeting?.state]);
  useEffect(()=>{if(!user)return;refresh().catch(e=>setError(e.message));api('/system').then(setSystem).catch(()=>{});const t=setInterval(()=>refresh().catch(()=>{}),2500);return()=>clearInterval(t);},[user,selected]);
  async function run(fn:()=>Promise<any>){setBusy(true);setError('');setInfo('');try{await fn();await refresh();}catch(e:any){setError(e.message);}finally{setBusy(false);}}
  function source(id:string){const s=meeting?.document.segments.find((x:any)=>x.id===id);if(s&&audio.current){audio.current.currentTime=s.start_ms/1000;audio.current.play().catch(()=>{});}document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'center'});}

@@ -19,7 +19,7 @@ New-Item -ItemType Directory -Path .runtime -Force | Out-Null
 if (-not (Test-Path -LiteralPath '.env')) { Copy-Item -LiteralPath '.env.example' -Destination '.env' }
 $envLines = Get-Content -LiteralPath '.env'
 $values = @{}
-foreach ($line in $envLines) { if ($line -match '^([A-Z_]+)=(.*)$') { $values[$matches[1]] = $matches[2] } }
+foreach ($line in $envLines) { if ($line -match '^([A-Z][A-Z0-9_]*)=(.*)$') { $values[$matches[1]] = $matches[2] } }
 $secretKeys = @('POSTGRES_PASSWORD','SERVICE_TOKEN','WEBHOOK_TOKEN','APP_SECRET','ADMIN_PASSWORD','N8N_ENCRYPTION_KEY','QDRANT_API_KEY')
 foreach ($key in $secretKeys) {
     if (-not $values[$key] -or $values[$key] -eq 'generate-with-scripts-init_env.py') {
@@ -28,11 +28,14 @@ foreach ($key in $secretKeys) {
         $values[$key] = [Convert]::ToHexString($bytes).ToLowerInvariant()
     }
 }
-foreach ($entry in @{'ADMIN_EMAIL'='admin@local.test';'LLM_MODEL'='qwen3:4b';'EMBEDDING_MODEL'='qwen3-embedding:0.6b';'ASR_MODEL'='/models/whisper-small';'SPEAKER_MODEL'='/models/speaker.onnx';'N8N_URL'='http://n8n:5678'}.GetEnumerator()) { if (-not $values[$entry.Key]) { $values[$entry.Key] = $entry.Value } }
+foreach ($entry in @{'ADMIN_EMAIL'='admin@local.test';'LLM_MODEL'='qwen3:4b-instruct-2507-q4_K_M';'EMBEDDING_MODEL'='qwen3-embedding:0.6b';'ASR_MODEL'='/models/whisper-small';'SPEAKER_MODEL'='/models/speaker.onnx';'N8N_URL'='http://n8n:5678'}.GetEnumerator()) { if (-not $values[$entry.Key]) { $values[$entry.Key] = $entry.Value } }
 # Update only project configuration keys, retaining comments and other values.
 $written = @{}
 $updated = foreach ($line in $envLines) {
-    if ($line -match '^([A-Z_]+)=(.*)$' -and $values.ContainsKey($matches[1])) { $key=$matches[1]; $written[$key]=$true; "$key=$($values[$key])" } else { $line }
+    if ($line -match '^([A-Z][A-Z0-9_]*)=(.*)$' -and $values.ContainsKey($matches[1])) {
+        $key=$matches[1]
+        if (-not $written.ContainsKey($key)) { $written[$key]=$true; "$key=$($values[$key])" }
+    } else { $line }
 }
 foreach ($key in $values.Keys) { if (-not $written.ContainsKey($key)) { $updated += "$key=$($values[$key])" } }
 [IO.File]::WriteAllLines((Join-Path $projectRoot '.env'), [string[]]$updated)

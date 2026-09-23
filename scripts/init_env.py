@@ -10,7 +10,7 @@ values = dict(POSTGRES_PASSWORD=secrets.token_hex(24), SERVICE_TOKEN=secrets.tok
               WEBHOOK_TOKEN=secrets.token_hex(32), APP_SECRET=secrets.token_hex(32),
               ADMIN_EMAIL='admin@local.test', ADMIN_PASSWORD=secrets.token_urlsafe(20),
               N8N_ENCRYPTION_KEY=secrets.token_hex(32), QDRANT_API_KEY=secrets.token_hex(32),
-              LLM_MODEL='qwen3:4b', EMBEDDING_MODEL='qwen3-embedding:0.6b',
+              LLM_MODEL='qwen3:4b-instruct-2507-q4_K_M', EMBEDDING_MODEL='qwen3-embedding:0.6b',
               ASR_MODEL='/models/whisper-small', SPEAKER_MODEL='/models/speaker.onnx', N8N_URL='http://n8n:5678')
 with target.open('a', encoding='utf-8') as out:
     out.write('\n' + '\n'.join(f'{key}={value}' for key, value in values.items() if key not in keys) + '\n')

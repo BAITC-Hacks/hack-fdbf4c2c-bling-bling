@@ -52,7 +52,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={}"
+        "jsonBody": "={{ JSON.stringify({}) }}"
       },
       "credentials": {
         "httpHeaderAuth": {

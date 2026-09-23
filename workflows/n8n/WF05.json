@@ -82,7 +82,7 @@
         180
       ],
       "parameters": {
-        "model": "qwen3:4b",
+        "model": "={{ $('Context').first().json.model }}",
         "options": {
           "temperature": 0,
           "think": false,
@@ -120,7 +120,7 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "scope_token": "={{ $('Context').item.json.scope_token }}",
+            "scope_token": "={{ $('Context').first().json.scope_token }}",
             "arguments_json": "={{ $fromAI('arguments_json', 'JSON object of tool arguments. '+\"Search the confirmed meeting with local RAG. arguments_json: {\\\"query\\\":\\\"question\\\", \\\"limit\\\":6}. Return source IDs as citations.\", 'string') }}"
           },
           "matchingColumns": [],
@@ -170,7 +170,7 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "scope_token": "={{ $('Context').item.json.scope_token }}",
+            "scope_token": "={{ $('Context').first().json.scope_token }}",
             "arguments_json": "={{ $fromAI('arguments_json', 'JSON object of tool arguments. '+\"Read exact source segments in this meeting. arguments_json: {\\\"segment_ids\\\":[\\\"source-id\\\"]}. Use IDs from input, at most 20.\", 'string') }}"
           },
           "matchingColumns": [],
@@ -220,7 +220,7 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "scope_token": "={{ $('Context').item.json.scope_token }}",
+            "scope_token": "={{ $('Context').first().json.scope_token }}",
             "arguments_json": "={{ $fromAI('arguments_json', 'JSON object of tool arguments. '+\"Read confirmed actions. arguments_json: {\\\"status_filter\\\":\\\"all\\\"}. Optional assignee_name.\", 'string') }}"
           },
           "matchingColumns": [],
@@ -270,7 +270,7 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "scope_token": "={{ $('Context').item.json.scope_token }}",
+            "scope_token": "={{ $('Context').first().json.scope_token }}",
             "arguments_json": "={{ $fromAI('arguments_json', 'JSON object of tool arguments. '+\"Find approved reference definitions. arguments_json: {\\\"query\\\":\\\"term\\\", \\\"limit\\\":3}. References do not prove meeting decisions.\", 'string') }}"
           },
           "matchingColumns": [],
@@ -318,7 +318,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({scope_token: $('Context').item.json.scope_token, output: $json.output}) }}"
+        "jsonBody": "={{ JSON.stringify({scope_token: $('Context').first().json.scope_token, output: $json.output}) }}"
       },
       "credentials": {
         "httpHeaderAuth": {
@@ -496,7 +496,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({scope_token:$('Context').item.json.scope_token,code:'agent_or_validation_failed'}) }}"
+        "jsonBody": "={{ JSON.stringify({scope_token:$('Context').first().json.scope_token,code:'agent_or_validation_failed'}) }}"
       },
       "credentials": {
         "httpHeaderAuth": {
@@ -515,7 +515,7 @@
         -270
       ],
       "parameters": {
-        "content": "## Local AI pipeline\nEach execution handles one bounded work unit. Full transcript coverage is tracked in PostgreSQL. Tools are read-only. The final protocol requires human confirmation.\n\nOllama qwen3:4b · no cloud models · no shared chat memory",
+        "content": "## Local AI pipeline\nEach execution handles one bounded work unit. Full transcript coverage is tracked in PostgreSQL. Tools are read-only. The final protocol requires human confirmation.\n\nOllama qwen3:4b-instruct-2507-q4_K_M · no cloud models · no shared chat memory",
         "width": 600,
         "height": 220,
         "color": 5

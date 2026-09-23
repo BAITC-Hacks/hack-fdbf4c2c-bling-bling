@@ -55,6 +55,8 @@ request('POST',f'/api/meetings/{meeting_id}/questions',json={'question':fixture[
 meeting=wait(meeting_id,lambda m:any(j['kind']=='qa' and j['state']=='succeeded' for j in m['jobs']))
 answer=next(j['result'] for j in meeting['jobs'] if j['kind']=='qa' and j['state']=='succeeded')
 assert answer['status']=='answered' and answer['source_segment_ids']
+assert 'айдана' in answer['answer'].casefold()
+assert any(due in answer['answer'].casefold() for due in ('пятниц','2026-09-25','25 сентября','25.09'))
 exports={}
 for format in ('pdf','docx'):
     request('POST',f'/api/meetings/{meeting_id}/exports',json={'format':format})
@@ -63,7 +65,7 @@ for format in ('pdf','docx'):
     r=http.get('/api/exports/'+job['id']);r.raise_for_status()
     assert r.content.startswith(b'%PDF' if format=='pdf' else b'PK')
     exports[format]={'bytes':len(r.content),'job_id':job['id']}
-report={'mode':'real','meeting_id':meeting_id,'model':'qwen3:4b','actions':actions,'answer':answer,'exports':exports,'jobs':meeting['jobs']}
+report={'mode':'real','meeting_id':meeting_id,'model':meeting['document']['provenance']['model'],'actions':actions,'answer':answer,'exports':exports,'jobs':meeting['jobs']}
 Path(args.report).parent.mkdir(parents=True,exist_ok=True)
 Path(args.report).write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
 print(json.dumps({'passed':True,'meeting_id':meeting_id,'actions':len(actions),'exports':list(exports)}))

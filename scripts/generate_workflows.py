@@ -103,13 +103,13 @@ def agent_bundle(role, y, edges, smoke=False):
                           'maxIterations': 4, 'returnIntermediateSteps': smoke, 'enableStreaming': False, 'autoSaveHighlightedData': False}}
     nodes = [node(name, AI+'agent', params, (620,y), 3.1, onError='continueErrorOutput')]
     modelname = f'Ollama {role}'
-    nodes.append(node(modelname, AI+'lmChatOllama', {'model': 'qwen3:4b', 'options': {'temperature': 0, 'think': False, 'numCtx': 4096, 'numPredict': 1200, 'keepAlive': '30s', 'numBatch': 256}}, (540,y+180), 1, CRED_OLLAMA))
+    nodes.append(node(modelname, AI+'lmChatOllama', {'model': 'qwen3:4b-instruct-2507-q4_K_M' if smoke else "={{ $('Context').first().json.model }}", 'options': {'temperature': 0, 'think': False, 'numCtx': 4096, 'numPredict': 1200, 'keepAlive': '30s', 'numBatch': 256}}, (540,y+180), 1, CRED_OLLAMA))
     link(edges, modelname, name, kind='ai_languageModel')
     names = ['smoke_echo'] if smoke else TOOLS[role]
     for i, toolname in enumerate(names):
         label = toolname if smoke else f'{role}_{toolname}'
         values = {'value': "={{ $fromAI('value', 'Value to echo', 'string') }}"} if smoke else {
-            'scope_token': "={{ $('Context').item.json.scope_token }}",
+            'scope_token': "={{ $('Context').first().json.scope_token }}",
             'arguments_json': "={{ $fromAI('arguments_json', 'JSON object of tool arguments. '+"+json.dumps(DESCRIPTIONS[toolname])+", 'string') }}"}
         params = {'name': toolname, 'description': 'Echo input value. Use for local tool verification.' if smoke else DESCRIPTIONS[toolname],
                   'source': 'database', 'workflowId': {'__rl': True, 'value': TOOL_IDS[toolname], 'mode': 'list'}, 'workflowInputs': mapper(values)}
@@ -154,7 +154,7 @@ all_workflows.append(workflow('WF01','События совещаний',nodes,e
 
 # Dispatcher: global lease prevents concurrent heavy units.
 edges={}; nodes=[node('Every 10 seconds',BASE+'scheduleTrigger',{'rule':{'interval':[{'field':'seconds','secondsInterval':10}]}},(0,0),1.2),node('Manual dispatch',BASE+'manualTrigger',pos=(0,200)),
-http('Claim one work unit','/internal/work/claim','={}',(230,0)),condition('Has work','has_work',(440,0)),switch('Work type','kind',['qa'],(650,0)),sub('Question answering','WF05',pos=(900,-80)),sub('Meeting analysis','WF03',pos=(900,120))]
+http('Claim one work unit','/internal/work/claim','={{ JSON.stringify({}) }}',(230,0)),condition('Has work','has_work',(440,0)),switch('Work type','kind',['qa'],(650,0)),sub('Question answering','WF05',pos=(900,-80)),sub('Meeting analysis','WF03',pos=(900,120))]
 for source in ('Every 10 seconds','Manual dispatch'):link(edges,source,'Claim one work unit')
 link(edges,'Claim one work unit','Has work');link(edges,'Has work','Work type',0);link(edges,'Work type','Question answering',0);link(edges,'Work type','Meeting analysis',1)
 all_workflows.append(workflow('WF02','Диспетчер очереди',nodes,edges,True))
@@ -167,11 +167,11 @@ for code, roles, title in [('WF03',['extract','reconcile','summary','verify'],'�
         bundle,agent=agent_bundle(role,index*480,edges);nodes+=bundle
         link(edges,'Agent role' if len(roles)>1 else 'Context',agent,index if len(roles)>1 else 0)
         link(edges,agent,'Validate',0);link(edges,agent,'Fail safely',1)
-    nodes += [http('Validate','/internal/work/validate',"={{ JSON.stringify({scope_token: $('Context').item.json.scope_token, output: $json.output}) }}",(1600,0)),condition('Valid','valid',(1830,0)),
+    nodes += [http('Validate','/internal/work/validate',"={{ JSON.stringify({scope_token: $('Context').first().json.scope_token, output: $json.output}) }}",(1600,0)),condition('Valid','valid',(1830,0)),
               http('Commit revision','/internal/work/commit',"={{ JSON.stringify({scope_token:$json.scope_token, output:$json.output}) }}",(2520,0)),http('Repair once','/internal/work/repair',pos=(2000,220)),http('Revalidate','/internal/work/validate',pos=(2210,220)),condition('Repaired','valid',(2420,220)),
-              http('Fail safely','/internal/work/fail',"={{ JSON.stringify({scope_token:$('Context').item.json.scope_token,code:'agent_or_validation_failed'}) }}",(2650,420))]
+              http('Fail safely','/internal/work/fail',"={{ JSON.stringify({scope_token:$('Context').first().json.scope_token,code:'agent_or_validation_failed'}) }}",(2650,420))]
     for a,b,p in [('Validate','Valid',0),('Valid','Commit revision',0),('Valid','Repair once',1),('Repair once','Revalidate',0),('Revalidate','Repaired',0),('Repaired','Commit revision',0),('Repaired','Fail safely',1)]:link(edges,a,b,p)
-    nodes.append(note('## Local AI pipeline\nEach execution handles one bounded work unit. Full transcript coverage is tracked in PostgreSQL. Tools are read-only. The final protocol requires human confirmation.\n\nOllama qwen3:4b · no cloud models · no shared chat memory',(0,-270),600,220))
+    nodes.append(note('## Local AI pipeline\nEach execution handles one bounded work unit. Full transcript coverage is tracked in PostgreSQL. Tools are read-only. The final protocol requires human confirmation.\n\nOllama qwen3:4b-instruct-2507-q4_K_M · no cloud models · no shared chat memory',(0,-270),600,220))
     all_workflows.append(workflow(code,title,nodes,edges))
 
 for code,title,path in [('WF04','Индексирование RAG','/internal/rag/index-jobs'),('WF06','Экспорт PDF и DOCX','/internal/export-jobs')]:
@@ -179,17 +179,11 @@ for code,title,path in [('WF04','Индексирование RAG','/internal/ra
     nodes.append(note('## Background job\nThe backend validates confirmation and enqueues durable work. The local worker performs embedding/indexing or document generation. PostgreSQL publishes the result only for the current revision.',(0,-220),530,190))
     all_workflows.append(workflow(code,title,nodes,edges))
 for code,title,path,interval in [('WF07','Напоминания','/internal/reminders/scan',{'field':'hours','hoursInterval':1}),('WF09','Восстановление очереди','/internal/maintenance/reconcile',{'field':'minutes','minutesInterval':10})]:
-    edges={};nodes=[node('Schedule',BASE+'scheduleTrigger',{'rule':{'interval':[interval]}},(0,0),1.2),node('Manual',BASE+'manualTrigger',pos=(0,180)),http('Run maintenance',path,'={}',(300,0))]
+    edges={};nodes=[node('Schedule',BASE+'scheduleTrigger',{'rule':{'interval':[interval]}},(0,0),1.2),node('Manual',BASE+'manualTrigger',pos=(0,180)),http('Run maintenance',path,'={{ JSON.stringify({}) }}',(300,0))]
     link(edges,'Schedule','Run maintenance');link(edges,'Manual','Run maintenance')
     all_workflows.append(workflow(code,title,nodes,edges,True))
 edges={};nodes=[node('Error Trigger',BASE+'errorTrigger'),http('Safe error metadata','/internal/workflow-errors',"={{ JSON.stringify({execution_id:$json.execution?.id||'', workflow_id:$json.workflow?.id||''}) }}",(300,0))];link(edges,'Error Trigger','Safe error metadata')
 all_workflows.append(workflow('WF08','Ошибки workflow',nodes,edges))
 
 (ROOT/'workflows'/'all.json').write_text(json.dumps(all_workflows,ensure_ascii=False,indent=2),encoding='utf-8')
-private=ROOT/'.runtime';private.mkdir(exist_ok=True)
-env=dict(line.split('=',1) for line in (ROOT/'.env').read_text(encoding='utf-8-sig').splitlines() if '=' in line and not line.startswith('#'))
-credentials=[{'id':'haBackendCred001','name':'HackAlem backend','type':'httpHeaderAuth','data':{'name':'Authorization','value':'Bearer '+env['SERVICE_TOKEN']}},
- {'id':'haEventCred00001','name':'HackAlem event ingress','type':'httpHeaderAuth','data':{'name':'X-Hackalem-Event','value':env['WEBHOOK_TOKEN']}},
- {'id':'haOllamaCred0001','name':'HackAlem Ollama local','type':'ollamaApi','data':{'baseUrl':'http://ollama:11434'}}]
-(private/'n8n-credentials.json').write_text(json.dumps(credentials),encoding='utf-8')
-print(f'Generated {len(all_workflows)} workflows; secrets written only to ignored .runtime.')
+print(f'Generated {len(all_workflows)} workflows. Credentials are created separately by scripts/start.ps1.')

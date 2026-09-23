@@ -98,7 +98,7 @@
         180
       ],
       "parameters": {
-        "model": "qwen3:4b",
+        "model": "qwen3:4b-instruct-2507-q4_K_M",
         "options": {
           "temperature": 0,
           "think": false,

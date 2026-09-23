@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     admin_password: str
     ollama_url: str = 'http://ollama:11434'
     n8n_url: str = 'http://n8n:5678'
-    llm_model: str = 'qwen3:4b'
+    llm_model: str = 'qwen3:4b-instruct-2507-q4_K_M'
     embedding_model: str = 'qwen3-embedding:0.6b'
     qdrant_url: str = 'http://qdrant:6333'
     qdrant_api_key: str = ''
