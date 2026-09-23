@@ -13,7 +13,7 @@ class MeetingCreate(BaseModel):
 class MeetingStatus(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    status: Literal["created"]
+    status: Literal["created", "uploading", "audio_ready", "transcribing", "transcribed"]
 
 
 class MeetingRead(MeetingStatus):

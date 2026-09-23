@@ -42,4 +42,5 @@ def test_missing_and_invalid_ids(settings):
             assert client.get(f"/meetings/{uuid4()}{suffix}").status_code == 404
             assert client.get(f"/meetings/not-a-uuid{suffix}").status_code == 422
         assert set(client.get("/openapi.json").json()["paths"]) == {
-            "/health", "/meetings", "/meetings/{id}", "/meetings/{id}/status"}
+            "/health", "/meetings", "/meetings/{id}", "/meetings/{id}/status", "/meetings/{id}/upload",
+            "/meetings/{id}/transcribe", "/meetings/{id}/transcript"}

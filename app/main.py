@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from sqlalchemy.orm import sessionmaker
 
 from app.api.meetings import router
+from app.api.transcripts import router as transcripts_router
+from app.services.transcription import FasterWhisperTranscriptionService
 from app.core.config import Settings
 from app.core.logging import configure_logging
 from app.db.database import Base, build_engine
@@ -23,7 +25,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             Base.metadata.create_all(engine)
             application.state.session_factory = sessionmaker(engine, expire_on_commit=False)
-            logging.getLogger("app").info("API started; meeting processing is not implemented")
+            application.state.transcription_service = FasterWhisperTranscriptionService(settings)
+            logging.getLogger("app").info("API started; local STT adapter ready, model loads on demand")
             yield
         finally:
             engine.dispose()
@@ -35,6 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.state.settings = settings
     application.include_router(router)
+    application.include_router(transcripts_router)
 
     @application.get("/health", tags=["health"])
     def health() -> dict[str, str]:
